@@ -9,16 +9,16 @@ import numpy as np
 
 def initialize(context):
     print("Attempting To Initialize")
-    context.gap = 28 #default value
     context.oo = 0
     context.max_leverage = 0.0
     context.securities_in_results = []
-    attach_pipeline(Custom_pipeline(context), 'Custom_pipeline') 
+    attach_pipeline(custom_pipe(context), 'custom_pipe') 
 
     '''
-    MARKET HOURS: 9:30 - 4:00
+    Hypothesis:
+    small cap equities with a bullish sentiment pop will continue upward overnight
 
-    initialize schedule:
+    Initialize Schedule:
     --------:---------------:------------
     time    : function      : description
     --------:---------------:------------
@@ -30,6 +30,10 @@ def initialize(context):
     4:00 pm : cancel_orders : 
     --------:---------------:------------
     
+    Possible improvements:
+     - is as_of date for sentiment utilized correctly?
+     - Long only (meant for use on RH), could long/short lower beta?
+     - Use limit orders?
     '''
 
     # run sell function everyday at 9:30 am
@@ -58,30 +62,23 @@ def initialize(context):
     context.B = []
     
     print("Initialization Successful")
-
-class SidInList(CustomFilter):  
-    inputs = []
-    window_length = 1
-    params = ('sid_list',)
-    def compute(self, today, assets, out, sid_list):
-        out[:] = np.in1d(assets, sid_list)   
         
-def Custom_pipeline(context):
+def custom_pipe(context):
     pipe = Pipeline()
-    sma_bear_7 = SimpleMovingAverage(inputs = [st.bearish_intensity], window_length=7)
-    sma_bull_7 = SimpleMovingAverage(inputs = [st.bullish_intensity], window_length=7)
-    sma_bear_6 = SimpleMovingAverage(inputs = [st.bearish_intensity], window_length=6)
+    # sma_bear_7 = SimpleMovingAverage(inputs = [st.bearish_intensity], window_length=7)
+    # sma_bull_7 = SimpleMovingAverage(inputs = [st.bullish_intensity], window_length=7)
+    # sma_bear_6 = SimpleMovingAverage(inputs = [st.bearish_intensity], window_length=6)
     sma_bull_6 = SimpleMovingAverage(inputs = [st.bullish_intensity], window_length=6)
-    sma_bear_5 = SimpleMovingAverage(inputs = [st.bearish_intensity], window_length=5)
+    # sma_bear_5 = SimpleMovingAverage(inputs = [st.bearish_intensity], window_length=5)
     sma_bull_5 = SimpleMovingAverage(inputs = [st.bullish_intensity], window_length=5)
-    sma_bear_4 = SimpleMovingAverage(inputs = [st.bearish_intensity], window_length=4)
+    # sma_bear_4 = SimpleMovingAverage(inputs = [st.bearish_intensity], window_length=4)
     sma_bull_4 = SimpleMovingAverage(inputs = [st.bullish_intensity], window_length=4)
-    sma_bear_3 = SimpleMovingAverage(inputs = [st.bearish_intensity], window_length=3)
+    # sma_bear_3 = SimpleMovingAverage(inputs = [st.bearish_intensity], window_length=3)
     sma_bull_3 = SimpleMovingAverage(inputs = [st.bullish_intensity], window_length=3)
-    sma_bear_2 = SimpleMovingAverage(inputs = [st.bearish_intensity], window_length=2)
+    # sma_bear_2 = SimpleMovingAverage(inputs = [st.bearish_intensity], window_length=2)
     sma_bull_2 = SimpleMovingAverage(inputs = [st.bullish_intensity], window_length=2)
     bull_1 = st.bullish_intensity.latest
-    bear_1 = st.bearish_intensity.latest
+    # bear_1 = st.bearish_intensity.latest
     volume = USEquityPricing.volume.latest
     pipe.add(st.bullish_intensity.latest, 'bullish_intensity')
     pipe.add(st.bearish_intensity.latest, 'bearish_intensity')
@@ -92,13 +89,13 @@ def Custom_pipeline(context):
     total_scan = st.total_scanned_messages.latest
     pricing = USEquityPricing.close.latest
     pipe.set_screen(
-                    (3.20 < pricing < 5.00)&\
-                    (volume>1000000)&\
-                    (bull_1 > sma_bull_2 < sma_bull_3  < sma_bull_4 < sma_bull_5 < sma_bull_6 > 0)&\
-                    (total_scan >= 10)&\
-                    (bull_1 > 0)
-                    #(bull_1 > bear_1)
-                   ) 
+        (3.20 < pricing < 5.00)&\
+        (volume>1000000)&\
+        (bull_1 > sma_bull_2 < sma_bull_3  < sma_bull_4 < sma_bull_5 < sma_bull_6 > 0)&\
+        (total_scan >= 10)&\
+        (bull_1 > 0)
+        #(bull_1 > bear_1)
+    ) 
     #pipe.set_screen(my_sid_filter & (sma_10 > sma_50) ) 
     return pipe
 
@@ -106,7 +103,7 @@ def before_trading_start(context,data):
     print("Before Trading Start")
     context.B = []
     context.S = []
-    context.results = pipeline_output('Custom_pipeline')
+    context.results = pipeline_output('custom_pipe')
     context.securities_in_results = []
     
     context.longs = []
@@ -131,7 +128,7 @@ def sell (context, data):
             
 def buy (context, data): 
    
-    context.results = pipeline_output('Custom_pipeline')
+    context.results = pipeline_output('custom_pipe')
     context.securities_in_results = []
     
     for s in context.results.index:
@@ -141,7 +138,6 @@ def buy (context, data):
         for sec in context.securities_in_results:
             if data.can_trade(sec):
                 context.longs.append(sec)
-    context.gap = 29 # after 60 minutes, close any open buy order. 
     count = 0
     for sec in context.portfolio.positions:
         if sec not in context.longs:
